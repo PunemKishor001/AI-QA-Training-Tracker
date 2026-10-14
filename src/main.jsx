@@ -45,6 +45,25 @@ const HABITS = [
   { id:"revise", label:"Record mistakes and revise", detail:"Write what failed and what you learned." }
 ];
 
+const LOG2BASE2_URL = "https://log2base2.com/courses/python/why-python";
+
+// Separate course checklist. The 10-day grouping is a suggested study order,
+// not an official Log2Base2 schedule.
+const LOG2BASE2_TOPICS = [
+  { day: 1, title: "Introduction to Python and Basics", topics: ["Why Python?", "Python block structure", "Comments in Python", "Print function", "Escape sequences", "Variables and dynamic typing", "id() and identity operator", "Input function", "String formatting"] },
+  { day: 2, title: "Operators and Decision Making", topics: ["Arithmetic operators", "Power operator", "Floor division", "Assignment operators", "Relational operators", "Logical operators", "Decision making", "if, if-else, nested if and elif"] },
+  { day: 3, title: "Strings and Collections", topics: ["Strings", "String indexing", "String slicing", "String methods", "Lists and list methods", "List indexing and slicing", "Tuples and tuple methods", "Dictionaries and dictionary methods", "Sets and set operations"] },
+  { day: 4, title: "Loops and Functions", topics: ["Why loops?", "for loops", "range()", "while loops", "Nested loops", "break, continue and pass", "else on loops", "Function definition", "Function arguments", "return statement"] },
+  { day: 5, title: "Functions, Scope and Exceptions", topics: ["Recursion", "Lambda functions", "Python scope", "Global and nonlocal keywords", "Errors and exceptions", "Exception handling", "finally clause"] },
+  { day: 6, title: "File Handling and Modules", topics: ["File basics and reading", "Writing files", "Copying files", "Deleting files", "Python modules"] },
+  { day: 7, title: "Classes and Inheritance", topics: ["Classes and objects", "Constructors", "Class and instance variables", "Inheritance", "Types of inheritance"] },
+  { day: 8, title: "Built-in Functions", topics: ["Random number functions", "Math functions", "Useful built-in functions", "Practise with len(), sum(), min(), max() and sorted()"] },
+  { day: 9, title: "Bitwise Operators", topics: ["Bitwise OR", "Bitwise AND", "Bitwise XOR", "Left shift", "Right shift", "One's complement"] },
+  { day: 10, title: "Decorators and Iterators", topics: ["Passing functions as arguments", "Decorators", "Iterators", "Iteration practice", "Review weak topics"] }
+];
+
+const LOG2BASE2_STORAGE_KEY = "log2base2-python-progress-v1";
+
 const STORAGE_KEY = "ai-qa-training-tracker-v1";
 const initialState = {
   startDate: "2026-10-14",
@@ -90,6 +109,20 @@ function App() {
   const [showAllTopics, setShowAllTopics] = useState(false);
   const [toast, setToast] = useState("");
   const [remindersEnabled, setRemindersEnabled] = useState(() => localStorage.getItem("ai-qa-reminders-enabled") === "true");
+  const [log2base2Progress, setLog2base2Progress] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(LOG2BASE2_STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [log2base2Notes, setLog2base2Notes] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`${LOG2BASE2_STORAGE_KEY}-notes`) || "{}");
+    } catch {
+      return {};
+    }
+  });
 
   useEffect(() => {
     if (!remindersEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
@@ -138,6 +171,14 @@ function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
+  useEffect(() => {
+    localStorage.setItem(LOG2BASE2_STORAGE_KEY, JSON.stringify(log2base2Progress));
+  }, [log2base2Progress]);
+
+  useEffect(() => {
+    localStorage.setItem(`${LOG2BASE2_STORAGE_KEY}-notes`, JSON.stringify(log2base2Notes));
+  }, [log2base2Notes]);
+
   const completedCount = Object.values(state.completedDays).filter(x => x.done).length;
   const totalChecks = DAYS.reduce((sum, d) => sum + HABITS.length, 0);
   const checkedCount = Object.values(state.completedDays).reduce((sum, d) => sum + Object.values(d.checks || {}).filter(Boolean).length, 0);
@@ -149,6 +190,16 @@ function App() {
   })));
   const topicDone = allTopics.filter(t => t.done).length;
   const filteredTopics = allTopics.filter(t => `${t.topic} ${t.dayTitle} day ${t.day}`.toLowerCase().includes(search.toLowerCase()));
+  const log2base2Total = LOG2BASE2_TOPICS.reduce((sum, section) => sum + section.topics.length, 0);
+  const log2base2Completed = Object.values(log2base2Progress).filter(Boolean).length;
+
+  function toggleLog2Base2Topic(id, value) {
+    setLog2base2Progress(prev => ({ ...prev, [id]: value }));
+  }
+
+  function updateLog2Base2Note(dayNo, value) {
+    setLog2base2Notes(prev => ({ ...prev, [dayNo]: value }));
+  }
 
   function updateDayCheck(dayNo, id, value) {
     setState(prev => {
@@ -228,6 +279,7 @@ function App() {
         <nav className="tabs">
           <button className={tab==="plan"?"active":""} onClick={()=>setTab("plan")}><CalendarDays size={16}/> Daily plan</button>
           <button className={tab==="topics"?"active":""} onClick={()=>setTab("topics")}><BookOpen size={16}/> All topics</button>
+          <button className={tab==="log2base2"?"active":""} onClick={()=>setTab("log2base2")}><Code2 size={16}/> Log2Base2 Python</button>
           <button className={tab==="progress"?"active":""} onClick={()=>setTab("progress")}><Trophy size={16}/> Progress review</button>
         </nav>
 
@@ -316,6 +368,37 @@ function App() {
           </div>
           <div className="warning-note"><AlertCircle size={18}/><p>This tracker stores data in this browser using local storage. Export your progress JSON regularly. If you open the deployed app on another browser or device, progress will not sync automatically without adding a backend/database.</p></div>
         </>}
+        {tab === "log2base2" && <div className="log2base2-page">
+          <section className="section-heading log2base2-heading">
+            <div>
+              <span className="eyebrow">SEPARATE PYTHON COURSE</span>
+              <h2>Log2Base2 Python</h2>
+              <p className="muted">Track this course separately from your 30-day AI QA plan. Mark a topic complete only after you practise it and can explain it.</p>
+              <a href={LOG2BASE2_URL} target="_blank" rel="noreferrer">Open Log2Base2 Python course ↗</a>
+            </div>
+            <span className="topic-count">{log2base2Completed}/{log2base2Total} topics complete</span>
+          </section>
+          <div className="progress-track log2base2-progress"><div style={{ width: `${log2base2Total ? (log2base2Completed / log2base2Total) * 100 : 0}%` }} /></div>
+          <p className="muted log2base2-description">Suggested sequence: 10 study groups. You can take longer and revisit any topic. This is not the official course's day-by-day schedule.</p>
+          {LOG2BASE2_TOPICS.map(section => {
+            const sectionCompleted = section.topics.filter((_, index) => log2base2Progress[`d${section.day}-t${index}`]).length;
+            return <section className="topic-card log2base2-day-card" key={section.day}>
+              <div className="card-title"><h3>Day {section.day}: {section.title}</h3><span>{sectionCompleted}/{section.topics.length}</span></div>
+              {section.topics.map((topic, index) => {
+                const id = `d${section.day}-t${index}`;
+                return <label className="topic-row" key={id}>
+                  <input type="checkbox" checked={Boolean(log2base2Progress[id])} onChange={event => toggleLog2Base2Topic(id, event.target.checked)} />
+                  <span>{topic}</span>
+                </label>;
+              })}
+              <label className="notes-label" style={{ display: "block", marginTop: "12px" }}>
+                <strong>Practice notes for Day {section.day}</strong>
+                <textarea rows={2} value={log2base2Notes[section.day] || ""} onChange={event => updateLog2Base2Note(section.day, event.target.value)} placeholder="Record code you wrote, output, errors, and what you can explain..." />
+              </label>
+            </section>;
+          })}
+        </div>}
+
         <footer><span>AI QA Training Tracker</span><span>Practice honestly. Mark progress only after demonstrating the skill.</span></footer>
       </main>
       {toast && <div className="toast"><CheckCircle2 size={16}/>{toast}</div>}
