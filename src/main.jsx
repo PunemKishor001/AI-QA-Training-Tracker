@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Code2, Download, Flame, RotateCcw, Target, Trophy, BookOpen, Clock3, Save, AlertCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Code2, Download, Flame, RotateCcw, Target, Trophy, BookOpen, Clock3, Save, AlertCircle, NotebookPen, ExternalLink, Pencil, Trash2, Plus, X } from "lucide-react";
 import "./styles.css";
 
 const DAYS = [
@@ -63,6 +63,7 @@ const LOG2BASE2_TOPICS = [
 ];
 
 const LOG2BASE2_STORAGE_KEY = "log2base2-python-progress-v1";
+const GOOGLE_NOTES_STORAGE_KEY = "ai-qa-google-notes-v1";
 
 const STORAGE_KEY = "ai-qa-training-tracker-v1";
 const initialState = {
@@ -116,6 +117,16 @@ function App() {
       return {};
     }
   });
+  const [googleNotes, setGoogleNotes] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(GOOGLE_NOTES_STORAGE_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [googleNoteForm, setGoogleNoteForm] = useState({ title: "", url: "", description: "", type: "docs" });
+  const [editingGoogleNoteId, setEditingGoogleNoteId] = useState(null);
+  const [googleNoteError, setGoogleNoteError] = useState("");
   const [log2base2Notes, setLog2base2Notes] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(`${LOG2BASE2_STORAGE_KEY}-notes`) || "{}");
@@ -176,6 +187,10 @@ function App() {
   }, [log2base2Progress]);
 
   useEffect(() => {
+    localStorage.setItem(GOOGLE_NOTES_STORAGE_KEY, JSON.stringify(googleNotes));
+  }, [googleNotes]);
+
+  useEffect(() => {
     localStorage.setItem(`${LOG2BASE2_STORAGE_KEY}-notes`, JSON.stringify(log2base2Notes));
   }, [log2base2Notes]);
 
@@ -199,6 +214,65 @@ function App() {
 
   function updateLog2Base2Note(dayNo, value) {
     setLog2base2Notes(prev => ({ ...prev, [dayNo]: value }));
+  }
+
+  function saveGoogleNote(event) {
+    event.preventDefault();
+    setGoogleNoteError("");
+    const title = googleNoteForm.title.trim();
+    const url = googleNoteForm.url.trim();
+    if (!title || !url) {
+      setGoogleNoteError("Enter both a title and a Google URL.");
+      return;
+    }
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      setGoogleNoteError("Enter a valid URL starting with https://");
+      return;
+    }
+    const host = parsed.hostname.toLowerCase();
+    const isGoogleDocs = host === "docs.google.com";
+    const isGoogleKeep = host === "keep.google.com";
+    if (parsed.protocol !== "https:" || (!isGoogleDocs && !isGoogleKeep)) {
+      setGoogleNoteError("Use a Google Docs (docs.google.com) or Google Keep (keep.google.com) URL.");
+      return;
+    }
+    const note = {
+      id: editingGoogleNoteId || (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
+      title,
+      url: parsed.href,
+      description: googleNoteForm.description.trim(),
+      type: isGoogleKeep ? "keep" : "docs",
+      updatedAt: new Date().toISOString()
+    };
+    setGoogleNotes(prev => editingGoogleNoteId
+      ? prev.map(item => item.id === editingGoogleNoteId ? note : item)
+      : [note, ...prev]);
+    setGoogleNoteForm({ title: "", url: "", description: "", type: "docs" });
+    setEditingGoogleNoteId(null);
+    notify(editingGoogleNoteId ? "Google note updated." : "Google note saved.");
+  }
+
+  function editGoogleNote(note) {
+    setGoogleNoteForm({ title: note.title, url: note.url, description: note.description || "", type: note.type });
+    setEditingGoogleNoteId(note.id);
+    setGoogleNoteError("");
+    document.getElementById("google-notes-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function deleteGoogleNote(id) {
+    if (!window.confirm("Delete this saved Google note link?")) return;
+    setGoogleNotes(prev => prev.filter(note => note.id !== id));
+    if (editingGoogleNoteId === id) cancelGoogleNoteEdit();
+    notify("Google note deleted.");
+  }
+
+  function cancelGoogleNoteEdit() {
+    setEditingGoogleNoteId(null);
+    setGoogleNoteForm({ title: "", url: "", description: "", type: "docs" });
+    setGoogleNoteError("");
   }
 
   function updateDayCheck(dayNo, id, value) {
@@ -280,6 +354,7 @@ function App() {
           <button className={tab==="plan"?"active":""} onClick={()=>setTab("plan")}><CalendarDays size={16}/> Daily plan</button>
           <button className={tab==="topics"?"active":""} onClick={()=>setTab("topics")}><BookOpen size={16}/> All topics</button>
           <button className={tab==="log2base2"?"active":""} onClick={()=>setTab("log2base2")}><Code2 size={16}/> Log2Base2 Python</button>
+          <button className={tab==="google-notes"?"active":""} onClick={()=>setTab("google-notes")}><NotebookPen size={16}/> Google Notes</button>
           <button className={tab==="progress"?"active":""} onClick={()=>setTab("progress")}><Trophy size={16}/> Progress review</button>
         </nav>
 
@@ -398,6 +473,68 @@ function App() {
             </section>;
           })}
         </div>}
+
+        {tab === "google-notes" && <section className="google-notes-page">
+          <section className="section-heading google-notes-heading">
+            <div>
+              <span className="eyebrow"><NotebookPen size={13}/> PERSONAL STUDY LINKS</span>
+              <h2>Google Notes</h2>
+              <p className="muted">Save Google Docs and Google Keep links for lessons, coding practice, interview answers, and revision.</p>
+            </div>
+            <span className="topic-count">{googleNotes.length} saved {googleNotes.length === 1 ? "note" : "notes"}</span>
+          </section>
+
+          <form id="google-notes-form" className="google-note-form" onSubmit={saveGoogleNote}>
+            <div className="google-note-form-title">
+              <h3>{editingGoogleNoteId ? <Pencil size={17}/> : <Plus size={17}/>} {editingGoogleNoteId ? "Edit saved link" : "Add a Google note link"}</h3>
+              <span className="muted">Links only — the note content stays in Google.</span>
+            </div>
+            <div className="google-note-fields">
+              <label className="google-note-field">
+                <span>Note title</span>
+                <input value={googleNoteForm.title} onChange={e => setGoogleNoteForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Python interview notes" maxLength={120} required />
+              </label>
+              <label className="google-note-field">
+                <span>Google URL</span>
+                <input type="url" value={googleNoteForm.url} onChange={e => setGoogleNoteForm(prev => ({ ...prev, url: e.target.value }))} placeholder="https://docs.google.com/document/d/..." required />
+              </label>
+              <label className="google-note-field google-note-description">
+                <span>Description <small>(optional)</small></span>
+                <textarea rows={3} value={googleNoteForm.description} onChange={e => setGoogleNoteForm(prev => ({ ...prev, description: e.target.value }))} placeholder="What is this note for? Python basics, Playwright locators, interview answers..." maxLength={500}/>
+              </label>
+            </div>
+            {googleNoteError && <p className="google-note-error" role="alert">{googleNoteError}</p>}
+            <div className="google-note-form-actions">
+              <button className="button primary" type="submit"><Save size={16}/>{editingGoogleNoteId ? "Update link" : "Save link"}</button>
+              {editingGoogleNoteId && <button className="button secondary" type="button" onClick={cancelGoogleNoteEdit}><X size={16}/> Cancel edit</button>}
+            </div>
+          </form>
+
+          <div className="google-notes-list-heading">
+            <div><h3>Saved links</h3><p className="muted">Open a link in a new tab. Make sure the Google document is shared with your account.</p></div>
+          </div>
+          {googleNotes.length === 0 ? <div className="google-notes-empty">
+            <div className="google-notes-empty-icon"><NotebookPen size={25}/></div>
+            <h3>No Google notes saved yet</h3>
+            <p>Add a Google Docs or Google Keep URL above to create your first shortcut.</p>
+          </div> : <div className="google-notes-grid">
+            {googleNotes.map(note => <article className="google-note-card" key={note.id}>
+              <div className="google-note-card-top">
+                <div className={`google-note-type-icon ${note.type === "keep" ? "keep" : "docs"}`}><NotebookPen size={19}/></div>
+                <span className="google-note-type">{note.type === "keep" ? "GOOGLE KEEP" : "GOOGLE DOCS"}</span>
+              </div>
+              <h3>{note.title}</h3>
+              {note.description ? <p className="google-note-card-description">{note.description}</p> : <p className="google-note-card-description muted">No description added.</p>}
+              <p className="google-note-url" title={note.url}>{note.url}</p>
+              <div className="google-note-card-actions">
+                <a className="button primary" href={note.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/> Open note</a>
+                <button className="button secondary" type="button" onClick={() => editGoogleNote(note)} aria-label={`Edit ${note.title}`}><Pencil size={15}/> Edit</button>
+                <button className="icon-button google-note-delete" type="button" onClick={() => deleteGoogleNote(note.id)} aria-label={`Delete ${note.title}`} title="Delete note"><Trash2 size={15}/></button>
+              </div>
+            </article>)}
+          </div>}
+          <div className="warning-note google-notes-warning"><AlertCircle size={18}/><p>Only the title, URL, and description are saved in this browser's localStorage. Your Google Docs/Keep content remains in Google. These shortcuts do not sync to other browsers or devices.</p></div>
+        </section>}
 
         <footer><span>AI QA Training Tracker</span><span>Practice honestly. Mark progress only after demonstrating the skill.</span></footer>
       </main>
